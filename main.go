@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/nbd-wtf/go-nostr"
 	"github.com/nbd-wtf/go-nostr/nip19"
@@ -15,60 +16,71 @@ import (
 const sk = "c6f8ab07d829850d378f5c88751b249ebe2686a14f17bb80fc2367f4ff3615c3"
 const npub = "npub103kpc6e2cxpsr360h7ap44ae63x3ey5cwn63drmq6jvutucdagfs0c70rg"
 
-var addr = flag.String("addr", "localhost:8080", "http service address")
-
-var Upgrader = websocket.Upgrader{
+var wsupgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
 }
 
 
 func main()  {
-	//初始化websocket连接
-	var w http.ResponseWriter
-	var r *http.Request
-	// 完成和Client HTTP >>> WebSocket的协议升级
-	WsConn, err := Upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Print("upgrade:", err)
-		return
-	}
 
-	defer WsConn.Close()
+	r := gin.Default()
+	r.LoadHTMLFiles("index.html")
 
-	//1、启动时连接并订阅relayer
-	var relays []*nostr.Relay
-	urls := []string{"ws://110.41.16.146:2700", "ws://182.61.59.53:2700"}
+	r.GET("/", func(c *gin.Context) {
+		c.HTML(200, "index.html", nil)
+	})
 
-	for _,url := range urls{
-		relay, e := nostr.RelayConnect(context.Background(), url)
-		if e != nil {
-			fmt.Println(e)
-			continue
-		}
-		go Subscribe(relay, context.Background(), WsConn)
-		relays = append(relays, relay)
-	}
+	r.GET("/ws", func(c *gin.Context) {
+		wshandler(c.Writer, c.Request)
+	})
+
+	r.Run("localhost:12312")
 
 
-	//2、监听长连接消息，接收到时发布
-	for {
-		// 接收客户端message
-		_, message, err := WsConn.ReadMessage()
-		if err != nil {
-			log.Println("read:", err)
-			break
-		}
-		log.Printf("recv: %s", message)
-		//向relayer发布message
-		for _,value := range relays{
-			fmt.Println("60:publish message", string(message))
-			Publish(value, context.Background(), string(message))
-		}
-	}
+
+	////初始化websocket连接
+	//var w http.ResponseWriter
+	//var r *http.Request
+	//// 完成和Client HTTP >>> WebSocket的协议升级
+	//WsConn, err := Upgrader.Upgrade(w, r, nil)
+	//if err != nil {
+	//	log.Print("upgrade:", err)
+	//	return
+	//}
+	//
+	//defer WsConn.Close()
+	//
+	////1、启动时连接并订阅relayer
+	//var relays []*nostr.Relay
+	//urls := []string{"ws://110.41.16.146:2700", "ws://182.61.59.53:2700"}
+	//
+	//for _,url := range urls{
+	//	relay, e := nostr.RelayConnect(context.Background(), url)
+	//	if e != nil {
+	//		fmt.Println(e)
+	//		continue
+	//	}
+	//	go Subscribe(relay, context.Background(), WsConn)
+	//	relays = append(relays, relay)
+	//}
+	//
+	//
+	////2、监听长连接消息，接收到时发布
+	//for {
+	//	// 接收客户端message
+	//	_, message, err := WsConn.ReadMessage()
+	//	if err != nil {
+	//		log.Println("read:", err)
+	//		break
+	//	}
+	//	log.Printf("recv: %s", message)
+	//	//向relayer发布message
+	//	for _,value := range relays{
+	//		fmt.Println("60:publish message", string(message))
+	//		Publish(value, context.Background(), string(message))
+	//	}
+	//}
 }
 
 // Publish 向指定relay连接发送内容为content的事件
@@ -117,3 +129,21 @@ func Subscribe(relay *nostr.Relay, c context.Context, conn *websocket.Conn){
 	}
 }
 
+func wshandler(w http.ResponseWriter, r *http.Request) {
+	conn, err := wsupgrader.Upgrade(w, r, nil)
+	if err != nil {
+		fmt.Println("Failed to set websocket upgrade: %+v", err)
+		return
+	}
+
+	for {
+		t, msg, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+		err = conn.WriteMessage(t, msg)
+		if err != nil {
+			return 
+		}
+	}
+}
