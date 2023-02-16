@@ -34,7 +34,7 @@ func main()  {
 		wshandler(c.Writer, c.Request)
 	})
 
-	r.Run("localhost:12312")
+	r.Run("127.0.0.1:12312")
 
 
 
