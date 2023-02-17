@@ -5,6 +5,11 @@
 
 <body>
 <h3>WebSocket Go</h3>
+
+<input type="text" id="msg_input">
+<input type="button" onclick="sendMsg()" value="发送">
+
+
 <pre id="output"></pre>
 
 <script>
@@ -21,10 +26,17 @@
         console.log(msg)
       }
 
-      c.onopen = function(){
-        setInterval(
-          function(){ send("ping") }
-        , 3000 )
+      // c.onopen = function(){
+      //   setInterval(
+      //     function(){
+      //         send("ping")
+      //     }
+      //   , 3000 )
+      // }
+
+      function sendMsg(){
+          var msg = document.getElementsByTagName("input")[0].value
+          send(msg)
       }
     </script>
 

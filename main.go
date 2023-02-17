@@ -86,7 +86,7 @@ func Publish(r *nostr.Relay, ctx context.Context, content string){
 		Content:   content,
 	}
 
-	fmt.Println("published to ", r.Publish(ctx, ev))
+	fmt.Println("publish msg to ", r.URL, r.Publish(ctx, ev))
 }
 
 func Subscribe(relay *nostr.Relay, c context.Context){
@@ -137,7 +137,7 @@ func wshandler(w http.ResponseWriter, r *http.Request, relays []*nostr.Relay) {
 		}
 		fmt.Println("receive ws msg:", t, string(msg))
 		for _,value := range relays{
-			fmt.Println("publish msg to relayer:", t, string(msg))
+			fmt.Println("send client msg to relayers:", t, string(msg))
 			Publish(value, context.Background(), string(msg))
 		}
 
