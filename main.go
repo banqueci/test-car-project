@@ -85,6 +85,10 @@ func Publish(r *nostr.Relay, ctx context.Context, content string){
 		Tags:      nil,
 		Content:   content,
 	}
+	err := ev.Sign(sk)
+	if err != nil {
+		return
+	}
 
 	fmt.Println("publish msg to ", r.URL, r.Publish(ctx, ev))
 }
@@ -119,7 +123,7 @@ func Subscribe(relay *nostr.Relay, c context.Context){
 		//	log.Println("write:", err)
 		//	break
 		//}
-		sendMsg(Ctx.Writer, Ctx.Request, ev.Content)
+		//sendMsg(Ctx.Writer, Ctx.Request, ev.Content)
 	}
 }
 
