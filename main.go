@@ -97,7 +97,7 @@ func Publish(relay *nostr.Relay, ctx context.Context, content string){
 		return
 	}
 
-	fmt.Println("publish msg to ", relay.URL, relay.Publish(ctx, ev))
+	fmt.Println("publish msg to relayer: ", relay.URL, relay.Publish(ctx, ev))
 }
 
 func (client *Client) Subscribe(relay *nostr.Relay, cont context.Context){
