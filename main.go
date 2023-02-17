@@ -26,20 +26,23 @@ var wsupgrader = websocket.Upgrader{
 	},
 }
 
-var Ctx *gin.Context
+type Client struct {
+	conn	*websocket.Conn
+	chn 	chan string
+}
+var Cli *Client
 
 func main()  {
-	//1、启动时连接并订阅relayer
+	//1、启动连接
+
 	var relays []*nostr.Relay
 	urls := []string{"ws://110.41.16.146:2700", "ws://182.61.59.53:2700"}
-
 	for _,url := range urls{
 		relay, e := nostr.RelayConnect(context.Background(), url)
 		if e != nil {
 			fmt.Println(e)
 			continue
 		}
-		go Subscribe(relay, context.Background())
 		relays = append(relays, relay)
 	}
 
@@ -47,20 +50,20 @@ func main()  {
 	r := gin.Default()
 	r.LoadHTMLFiles("index.html")
 
+
 	r.GET("/", func(c *gin.Context) {
 		c.HTML(200, "index.html", nil)
-		//Ctx = c
 	})
 
 	r.GET("/ws", func(c *gin.Context) {
-		wshandler(c.Writer, c.Request, relays)
+		//监听客户端长连接消息，并订阅relayer
+		//client := NewClient(c.Writer, c.Request)
+		Cli = NewClient(c.Writer, c.Request)
+		Cli.wshandler(relays)
+		Cli.sendMsg()
 	})
 
 	r.Run("127.0.0.1:12312")
-
-
-
-
 
 	////3、监听长连接消息，接收到时发布
 	//for {
@@ -80,7 +83,7 @@ func main()  {
 }
 
 // Publish 向指定relay连接发送内容为content的事件
-func Publish(r *nostr.Relay, ctx context.Context, content string){
+func Publish(relay *nostr.Relay, ctx context.Context, content string){
 	pub,_ := nostr.GetPublicKey(sk_a)
 	ev := nostr.Event{
 		PubKey:    pub,
@@ -94,10 +97,10 @@ func Publish(r *nostr.Relay, ctx context.Context, content string){
 		return
 	}
 
-	fmt.Println("publish msg to ", r.URL, r.Publish(ctx, ev))
+	fmt.Println("publish msg to ", relay.URL, relay.Publish(ctx, ev))
 }
 
-func Subscribe(relay *nostr.Relay, c context.Context){
+func (client *Client) Subscribe(relay *nostr.Relay, cont context.Context){
 	var filters nostr.Filters
 	if _, v, err := nip19.Decode(npub_b); err == nil {
 		pub := v.(string)
@@ -110,7 +113,7 @@ func Subscribe(relay *nostr.Relay, c context.Context){
 		panic(err)
 	}
 
-	ctx, _ := context.WithCancel(c)
+	ctx, _ := context.WithCancel(cont)
 	sub := relay.Subscribe(ctx, filters)
 	go func() {
 		<-sub.EndOfStoredEvents
@@ -119,59 +122,56 @@ func Subscribe(relay *nostr.Relay, c context.Context){
 
 	for ev := range sub.Events {
 		// 处理监听到的事件（channel将持续开启，直到ctx被cancelled）
-		fmt.Println(ev.ID, "=======", ev.PubKey, "=======", ev.Content)
+		fmt.Println("handle relayer msg:", ev.ID, "=======", ev.PubKey, "=======", ev.Content)
 
-		//通过ws向客户端发送message
-		//err := conn.WriteMessage(1, []byte(ev.Content))
-		//if err != nil {
-		//	log.Println("write:", err)
-		//	break
-		//}
-		//sendMsg(Ctx.Writer, Ctx.Request, ev.Content)
+		//将消息通过ws发送给客户端
+		fmt.Println("send relayer to client:", ev.Content)
+		client.conn.WriteMessage(1, []byte(ev.Content))
 	}
 }
 
-func wshandler(w http.ResponseWriter, r *http.Request, relays []*nostr.Relay) {
-	conn, err := wsupgrader.Upgrade(w, r, nil)
-	if err != nil {
-		fmt.Printf("Failed to set websocket upgrade: %+v\n", err)
-		return
+func (client *Client) wshandler(relays []*nostr.Relay) {
+	//先开启订阅relayer
+	for _,relayUrl := range relays{
+		go client.Subscribe(relayUrl, context.Background())
 	}
 
+	//再监听长连接消息，监听到则发送到relayer
 	for {
-		t, msg, err := conn.ReadMessage()
+		t, msg, err := client.conn.ReadMessage()
 		if err != nil {
 			break
 		}
 		fmt.Println("receive ws msg:", t, string(msg))
 		for _,value := range relays{
-			fmt.Println("send client msg to relayers:", t, string(msg))
+			fmt.Println("send msg to relayers:", t, string(msg))
 			Publish(value, context.Background(), string(msg))
 		}
-
-		//err = conn.WriteMessage(t, msg)
-		//if err != nil {
-		//	return
-		//}
 	}
 }
 
-func sendMsg(w http.ResponseWriter, r *http.Request, msg string) {
+func (client *Client) sendMsg() {
+	for {
+		select {
+		case msg := <- client.chn:
+			fmt.Println("send ws msg to client:", 1, msg)
+			err := client.conn.WriteMessage(1, []byte(msg))
+			if err != nil {
+				return
+			}
+		}
+	}
+}
+
+func NewClient (w http.ResponseWriter, r *http.Request) *Client{
 	conn, err := wsupgrader.Upgrade(w, r, nil)
 	if err != nil {
 		fmt.Printf("Failed to set websocket upgrade: %+v\n", err)
-		return
+		return nil
 	}
-
-	for {
-		//t, msg, err := conn.ReadMessage()
-		//if err != nil {
-		//	break
-		//}
-		fmt.Println("send ws msg:", 1, msg)
-		err = conn.WriteMessage(1, []byte(msg))
-		if err != nil {
-			return
-		}
+	client := &Client{
+		conn: conn,
+		chn: make(chan string),
 	}
+	return client
 }
