@@ -11,8 +11,12 @@ import (
 	"time"
 )
 
-const sk = "c6f8ab07d829850d378f5c88751b249ebe2686a14f17bb80fc2367f4ff3615c3"
-const npub = "npub103kpc6e2cxpsr360h7ap44ae63x3ey5cwn63drmq6jvutucdagfs0c70rg"
+const (
+	sk_a = "d8e98247de9d8ca2740bffa4c7c881a9393cb175bea8d14d61420a3a888f2c1e"
+	sk_b = "20a5f842b33b05ce853be233e15fdca6822a12548375289d513f3063c413bcb0"
+	npub_a = "npub1e7r6zt0dqgh38snlghvk2pk6m8qy5ra5xwxvr85jmv5cja5tds7scxsvy6"
+	npub_b = "npub1y5whtkawpts9vnt7s38gcaf0sq9adv0f9akt97ewkfslm0gr9hnqxvnw0t"
+)
 
 var wsupgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
@@ -77,7 +81,7 @@ func main()  {
 
 // Publish 向指定relay连接发送内容为content的事件
 func Publish(r *nostr.Relay, ctx context.Context, content string){
-	pub,_ := nostr.GetPublicKey(sk)
+	pub,_ := nostr.GetPublicKey(sk_a)
 	ev := nostr.Event{
 		PubKey:    pub,
 		CreatedAt: time.Now(),
@@ -85,7 +89,7 @@ func Publish(r *nostr.Relay, ctx context.Context, content string){
 		Tags:      nil,
 		Content:   content,
 	}
-	err := ev.Sign(sk)
+	err := ev.Sign(sk_a)
 	if err != nil {
 		return
 	}
@@ -95,7 +99,7 @@ func Publish(r *nostr.Relay, ctx context.Context, content string){
 
 func Subscribe(relay *nostr.Relay, c context.Context){
 	var filters nostr.Filters
-	if _, v, err := nip19.Decode(npub); err == nil {
+	if _, v, err := nip19.Decode(npub_b); err == nil {
 		pub := v.(string)
 		filters = []nostr.Filter{{
 			Kinds:   []int{nostr.KindTextNote},
@@ -115,7 +119,7 @@ func Subscribe(relay *nostr.Relay, c context.Context){
 
 	for ev := range sub.Events {
 		// 处理监听到的事件（channel将持续开启，直到ctx被cancelled）
-		fmt.Println(ev.ID, "=======", ev.Content)
+		fmt.Println(ev.ID, "=======", ev.PubKey, "=======", ev.Content)
 
 		//通过ws向客户端发送message
 		//err := conn.WriteMessage(1, []byte(ev.Content))
