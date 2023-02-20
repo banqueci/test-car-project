@@ -132,9 +132,10 @@ func (client *Client) Subscribe(relay *nostr.Relay, cont context.Context){
 
 func (client *Client) wshandler(relays []*nostr.Relay) {
 	//先开启订阅relayer
-	for _,relayUrl := range relays{
-		go client.Subscribe(relayUrl, context.Background())
-	}
+	//for _,relayUrl := range relays{
+	//	go client.Subscribe(relayUrl, context.Background())
+	//}
+	go client.Subscribe(relays[0], context.Background())
 
 	//再监听长连接消息，监听到则发送到relayer
 	for {
